@@ -1,3 +1,9 @@
 # TaskPlanner Requirements
-# Add your project dependencies here
-
+# 
+# This application uses only Python standard library modules:
+# - tkinter (GUI)
+# - json (data persistence)
+# - datetime (date handling)
+# - unittest (testing)
+#
+# No external dependencies are required for Python 3.8+

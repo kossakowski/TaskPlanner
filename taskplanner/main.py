@@ -2,14 +2,14 @@
 Main entry point for TaskPlanner application.
 """
 
+from .gui import TaskPlannerApp
+
 
 def main():
     """Main function to run the TaskPlanner application."""
-    print("Welcome to TaskPlanner!")
-    print("This application is under development.")
-    # TODO: Add application logic here
+    app = TaskPlannerApp()
+    app.run()
 
 
 if __name__ == "__main__":
     main()
-
