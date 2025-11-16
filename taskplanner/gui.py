@@ -8,7 +8,18 @@ import tkinter as tk
 from tkinter import ttk, messagebox, scrolledtext
 from typing import Optional, List, Tuple
 from datetime import datetime
-from .core import Task, TaskManager, save_tasks_to_json, load_tasks_from_json, is_valid_date, format_date, parse_date
+from .core import (
+    Task,
+    TaskManager,
+    save_tasks_to_json,
+    load_tasks_from_json,
+    is_valid_date,
+    format_date,
+    parse_date,
+    resolve_schedule,
+    parse_datetime,
+    format_datetime,
+)
 
 # Try to import tkcalendar for date picker (optional)
 try:
@@ -43,6 +54,7 @@ class TaskPlannerApp:
         
         # Initialize task manager and load tasks
         self.task_manager = TaskManager()
+        self.categories: List[str] = []
         self.current_selected_index: Optional[int] = None
         self.current_sort_mode: str = "none"  # "none", "deadline", "title", "completion"
         self.current_filter_completed: Optional[bool] = None
@@ -51,6 +63,10 @@ class TaskPlannerApp:
             tasks = load_tasks_from_json()
             for task in tasks:
                 self.task_manager.add_task(task)
+            # Initialize category list from existing tasks
+            self.categories = sorted(
+                {t.category for t in tasks if getattr(t, "category", "").strip()}
+            )
         except Exception as e:
             messagebox.showerror("Error", f"Failed to load tasks: {e}")
         
@@ -81,10 +97,26 @@ class TaskPlannerApp:
         self.title_entry = ttk.Entry(input_frame, width=30)
         self.title_entry.grid(row=0, column=1, sticky=(tk.W, tk.E), pady=5, padx=(5, 0))
         
+        # Category field with management
+        ttk.Label(input_frame, text="Category *:").grid(row=1, column=0, sticky=tk.W, pady=5)
+        category_frame = ttk.Frame(input_frame)
+        category_frame.grid(row=1, column=1, sticky=(tk.W, tk.E), pady=5, padx=(5, 0))
+        category_frame.columnconfigure(0, weight=1)
+        self.category_var = tk.StringVar()
+        self.category_combo = ttk.Combobox(
+            category_frame,
+            textvariable=self.category_var,
+            values=self.categories,
+            state="normal",
+        )
+        self.category_combo.grid(row=0, column=0, sticky=(tk.W, tk.E))
+        ttk.Button(category_frame, text="Add", width=5, command=self._add_category).grid(row=0, column=1, padx=(5, 0))
+        ttk.Button(category_frame, text="Remove", width=7, command=self._remove_category).grid(row=0, column=2, padx=(5, 0))
+        
         # Deadline field with optional date picker
-        ttk.Label(input_frame, text="Deadline (DD-MM-YYYY) *:").grid(row=1, column=0, sticky=tk.W, pady=5)
+        ttk.Label(input_frame, text="Deadline (DD-MM-YYYY) *:").grid(row=2, column=0, sticky=tk.W, pady=5)
         deadline_frame = ttk.Frame(input_frame)
-        deadline_frame.grid(row=1, column=1, sticky=(tk.W, tk.E), pady=5, padx=(5, 0))
+        deadline_frame.grid(row=2, column=1, sticky=(tk.W, tk.E), pady=5, padx=(5, 0))
         deadline_frame.columnconfigure(0, weight=1)
         
         self.deadline_entry = ttk.Entry(deadline_frame, width=25)
@@ -93,22 +125,38 @@ class TaskPlannerApp:
         # Add date picker button if available
         if HAS_DATE_PICKER:
             ttk.Button(deadline_frame, text="📅", width=3, command=self._open_date_picker).grid(row=0, column=1, padx=(5, 0))
-        else:
-            # Create a date picker widget that's always available (fallback)
-            # We'll create a simple popup calendar using tkcalendar if available
-            pass
         
-        # Estimated time field (hours format)
-        ttk.Label(input_frame, text="Estimated time (hours) *:").grid(row=2, column=0, sticky=tk.W, pady=5)
+        # Start datetime field
+        ttk.Label(input_frame, text="Start (DD-MM-YYYY HH:MM):").grid(row=3, column=0, sticky=tk.W, pady=5)
+        self.start_entry = ttk.Entry(input_frame, width=30)
+        self.start_entry.grid(row=3, column=1, sticky=(tk.W, tk.E), pady=5, padx=(5, 0))
+        self.start_entry.bind('<KeyRelease>', lambda e: self._auto_calculate_schedule())
+        
+        # End datetime field
+        ttk.Label(input_frame, text="End (DD-MM-YYYY HH:MM):").grid(row=4, column=0, sticky=tk.W, pady=5)
+        self.end_entry = ttk.Entry(input_frame, width=30)
+        self.end_entry.grid(row=4, column=1, sticky=(tk.W, tk.E), pady=5, padx=(5, 0))
+        self.end_entry.bind('<KeyRelease>', lambda e: self._auto_calculate_schedule())
+        
+        # Estimated time field (hours format, duration)
+        ttk.Label(input_frame, text="Estimated time / Duration (hours) *:").grid(row=5, column=0, sticky=tk.W, pady=5)
         self.time_entry = ttk.Entry(input_frame, width=30)
-        self.time_entry.grid(row=2, column=1, sticky=(tk.W, tk.E), pady=5, padx=(5, 0))
-        time_help_label = ttk.Label(input_frame, text="e.g., 1 or 1.25 (1h 15min)", font=("TkDefaultFont", 8), foreground="gray")
-        time_help_label.grid(row=3, column=1, sticky=tk.W, padx=(5, 0), pady=(0, 5))
+        self.time_entry.grid(row=5, column=1, sticky=(tk.W, tk.E), pady=5, padx=(5, 0))
+        self.time_entry.bind('<KeyRelease>', lambda e: self._auto_calculate_schedule())
+        time_help_label = ttk.Label(
+            input_frame,
+            text="Enter hours, e.g., 1 or 1.25 (1h 15min). Two of start/end/duration are required.",
+            font=("TkDefaultFont", 8),
+            foreground="gray",
+            wraplength=280,
+            justify=tk.LEFT,
+        )
+        time_help_label.grid(row=6, column=0, columnspan=2, sticky=tk.W, padx=(5, 0), pady=(0, 5))
         
         # Notes field
-        ttk.Label(input_frame, text="Notes / Hints:").grid(row=4, column=0, sticky=(tk.W, tk.N), pady=5)
+        ttk.Label(input_frame, text="Notes / Hints:").grid(row=7, column=0, sticky=(tk.W, tk.N), pady=5)
         self.notes_text = scrolledtext.ScrolledText(input_frame, width=30, height=6, wrap=tk.WORD)
-        self.notes_text.grid(row=4, column=1, sticky=(tk.W, tk.E), pady=5, padx=(5, 0))
+        self.notes_text.grid(row=7, column=1, sticky=(tk.W, tk.E), pady=5, padx=(5, 0))
         
         # Completion status checkbox
         self.completed_var = tk.BooleanVar()
@@ -117,11 +165,11 @@ class TaskPlannerApp:
             text="Mark as completed",
             variable=self.completed_var
         )
-        self.completed_checkbox.grid(row=5, column=0, columnspan=2, sticky=tk.W, pady=5)
+        self.completed_checkbox.grid(row=8, column=0, columnspan=2, sticky=tk.W, pady=5)
         
         # Buttons frame
         buttons_frame = ttk.Frame(input_frame)
-        buttons_frame.grid(row=6, column=0, columnspan=2, pady=10)
+        buttons_frame.grid(row=9, column=0, columnspan=2, pady=10)
         
         ttk.Button(buttons_frame, text="Add Task", command=self._add_task).pack(side=tk.LEFT, padx=5)
         ttk.Button(buttons_frame, text="Update Task", command=self._update_task).pack(side=tk.LEFT, padx=5)
@@ -168,17 +216,19 @@ class TaskPlannerApp:
         tree_frame.rowconfigure(0, weight=1)
         
         # Create treeview with columns
-        columns = ("Title", "Deadline", "Estimated Time", "Status")
+        columns = ("Title", "Category", "Deadline", "Estimated Time", "Status")
         self.task_tree = ttk.Treeview(tree_frame, columns=columns, show="headings", height=15)
         
         # Configure column headings
         self.task_tree.heading("Title", text="Title")
+        self.task_tree.heading("Category", text="Category")
         self.task_tree.heading("Deadline", text="Deadline")
         self.task_tree.heading("Estimated Time", text="Estimated Time (h)")
         self.task_tree.heading("Status", text="Status")
         
         # Configure column widths
         self.task_tree.column("Title", width=200)
+        self.task_tree.column("Category", width=120)
         self.task_tree.column("Deadline", width=120)
         self.task_tree.column("Estimated Time", width=150)
         self.task_tree.column("Status", width=100)
@@ -211,16 +261,22 @@ class TaskPlannerApp:
         """
         return {
             "title": self.title_entry.get().strip(),
+            "category": self.category_var.get().strip(),
             "deadline": self.deadline_entry.get().strip(),
+            "start": self.start_entry.get().strip(),
+            "end": self.end_entry.get().strip(),
             "estimated_time": self.time_entry.get().strip(),
             "notes": self.notes_text.get("1.0", tk.END).strip(),
-            "completed": self.completed_var.get()
+            "completed": self.completed_var.get(),
         }
     
     def _clear_form(self):
         """Clear all input fields."""
         self.title_entry.delete(0, tk.END)
+        self.category_var.set("")
         self.deadline_entry.delete(0, tk.END)
+        self.start_entry.delete(0, tk.END)
+        self.end_entry.delete(0, tk.END)
         self.time_entry.delete(0, tk.END)
         self.notes_text.delete("1.0", tk.END)
         self.completed_var.set(False)
@@ -281,6 +337,92 @@ class TaskPlannerApp:
         
         ttk.Button(button_frame, text="OK", command=apply_date).pack(side=tk.LEFT, padx=5)
         ttk.Button(button_frame, text="Cancel", command=popup.destroy).pack(side=tk.LEFT, padx=5)
+
+    def _add_category(self):
+        """Add a new category based on the current category entry."""
+        name = self.category_var.get().strip()
+        if not name:
+            messagebox.showwarning("Category", "Please enter a category name before adding.")
+            return
+        if name not in self.categories:
+            self.categories.append(name)
+            self.categories.sort()
+            self.category_combo["values"] = self.categories
+
+    def _remove_category(self):
+        """Remove the currently selected category from the list."""
+        name = self.category_var.get().strip()
+        if not name:
+            messagebox.showwarning("Category", "Please select a category to remove.")
+            return
+        if name in self.categories:
+            if not messagebox.askyesno(
+                "Remove Category",
+                f"Remove category '{name}' from the list? Existing tasks will keep their category value.",
+            ):
+                return
+            self.categories.remove(name)
+            self.category_combo["values"] = self.categories
+    
+    def _auto_calculate_schedule(self):
+        """
+        Automatically calculate the missing field when two of start/end/duration are provided.
+        This is called on key release in start, end, or duration fields.
+        """
+        # Prevent recursive updates
+        if hasattr(self, '_calculating_schedule'):
+            return
+        self._calculating_schedule = True
+        
+        try:
+            start_str = self.start_entry.get().strip()
+            end_str = self.end_entry.get().strip()
+            duration_str = self.time_entry.get().strip()
+            
+            # Try to parse each field
+            start_dt = parse_datetime(start_str) if start_str else None
+            end_dt = parse_datetime(end_str) if end_str else None
+            
+            duration_val = None
+            if duration_str:
+                try:
+                    duration_clean = duration_str.strip().rstrip("h").strip()
+                    duration_val = float(duration_clean)
+                    if duration_val < 0:
+                        duration_val = None
+                except ValueError:
+                    duration_val = None
+            
+            # Count how many valid fields we have
+            valid_count = sum(1 for x in (start_dt, end_dt, duration_val) if x is not None)
+            
+            # Only auto-calculate if we have exactly 2 valid fields
+            if valid_count == 2:
+                try:
+                    # Use resolve_schedule to calculate the missing field
+                    start_out, end_out, duration_out = resolve_schedule(
+                        start_str=start_str if start_dt else "",
+                        end_str=end_str if end_dt else "",
+                        duration_hours=duration_val,
+                    )
+                    
+                    # Update the fields without triggering events
+                    # Determine which field to update (the one that was empty/invalid)
+                    if start_dt is None:
+                        self.start_entry.delete(0, tk.END)
+                        self.start_entry.insert(0, start_out)
+                    if end_dt is None:
+                        self.end_entry.delete(0, tk.END)
+                        self.end_entry.insert(0, end_out)
+                    if duration_val is None:
+                        self.time_entry.delete(0, tk.END)
+                        time_norm = f"{duration_out:.2f}".rstrip("0").rstrip(".")
+                        self.time_entry.insert(0, time_norm)
+                except ValueError:
+                    # If calculation fails, silently ignore (user might still be typing)
+                    pass
+        finally:
+            self._calculating_schedule = False
     
     def _validate_form(self) -> Tuple[bool, str]:
         """
@@ -294,23 +436,52 @@ class TaskPlannerApp:
         if not data["title"]:
             return False, "Title is required"
         
+        if not data["category"]:
+            return False, "Category is required"
+        
         if not data["deadline"]:
             return False, "Deadline is required"
         
         if not is_valid_date(data["deadline"]):
-            return False, f"Invalid deadline format. Please use DD-MM-YYYY format (e.g., 25-12-2025)"
+            return False, "Invalid deadline format. Please use DD-MM-YYYY (e.g., 25-12-2025)"
         
-        if not data["estimated_time"]:
-            return False, "Estimated time is required"
-        
+        # Parse duration if provided
+        duration_str = data["estimated_time"]
+        if not duration_str:
+            return False, "Estimated time / duration is required"
         try:
-            # Remove 'h' suffix if present and convert to float
-            time_str = data["estimated_time"].strip().rstrip('h').strip()
-            time_value = float(time_str)
-            if time_value < 0:
-                return False, "Estimated time must be a non-negative number"
+            duration_clean = duration_str.strip().rstrip("h").strip()
+            duration_val = float(duration_clean)
+            if duration_val < 0:
+                return False, "Estimated time must be a non-negative number of hours"
         except ValueError:
             return False, "Estimated time must be a valid number in hours (e.g., 1 or 1.25)"
+        
+        # Validate schedule: require at least two of start, end, duration
+        start_str = data["start"]
+        end_str = data["end"]
+        provided = 0
+        if start_str:
+            provided += 1
+        if end_str:
+            provided += 1
+        if duration_str:
+            provided += 1
+        if provided < 2:
+            return (
+                False,
+                "Please provide at least two of: Start, End, and Estimated time / Duration (hours).",
+            )
+        
+        # Let core logic validate and resolve; we do not care about result here, only validity
+        try:
+            _start_out, _end_out, _dur_out = resolve_schedule(
+                start_str=start_str,
+                end_str=end_str,
+                duration_hours=duration_val,
+            )
+        except ValueError as exc:
+            return False, str(exc)
         
         return True, ""
     
@@ -325,15 +496,34 @@ class TaskPlannerApp:
         
         try:
             # Convert estimated time to float (handle 'h' suffix if present)
-            time_str = data["estimated_time"].strip().rstrip('h').strip()
-            estimated_time = float(time_str)
-            
+            time_str = data["estimated_time"].strip().rstrip("h").strip()
+            duration_hours = float(time_str)
+
+            # Let core logic resolve schedule and normalize fields
+            start_out, end_out, duration_out = resolve_schedule(
+                start_str=data["start"],
+                end_str=data["end"],
+                duration_hours=duration_hours,
+            )
+
+            # Update form fields to reflect normalized values
+            self.start_entry.delete(0, tk.END)
+            self.start_entry.insert(0, start_out)
+            self.end_entry.delete(0, tk.END)
+            self.end_entry.insert(0, end_out)
+            self.time_entry.delete(0, tk.END)
+            time_norm = f"{duration_out:.2f}".rstrip("0").rstrip(".")
+            self.time_entry.insert(0, time_norm)
+
             task = Task(
                 title=data["title"],
+                category=data["category"],
                 deadline=data["deadline"],
-                estimated_time=estimated_time,
+                estimated_time=duration_out,
+                start_datetime=start_out,
+                end_datetime=end_out,
                 notes=data["notes"],
-                completed=data["completed"]
+                completed=data["completed"],
             )
             
             self.task_manager.add_task(task)
@@ -360,15 +550,34 @@ class TaskPlannerApp:
         
         try:
             # Convert estimated time to float (handle 'h' suffix if present)
-            time_str = data["estimated_time"].strip().rstrip('h').strip()
-            estimated_time = float(time_str)
-            
+            time_str = data["estimated_time"].strip().rstrip("h").strip()
+            duration_hours = float(time_str)
+
+            # Resolve schedule and normalize values
+            start_out, end_out, duration_out = resolve_schedule(
+                start_str=data["start"],
+                end_str=data["end"],
+                duration_hours=duration_hours,
+            )
+
+            # Update form fields to reflect normalized values
+            self.start_entry.delete(0, tk.END)
+            self.start_entry.insert(0, start_out)
+            self.end_entry.delete(0, tk.END)
+            self.end_entry.insert(0, end_out)
+            self.time_entry.delete(0, tk.END)
+            time_norm = f"{duration_out:.2f}".rstrip("0").rstrip(".")
+            self.time_entry.insert(0, time_norm)
+
             task = Task(
                 title=data["title"],
+                category=data["category"],
                 deadline=data["deadline"],
-                estimated_time=estimated_time,
+                estimated_time=duration_out,
+                start_datetime=start_out,
+                end_datetime=end_out,
                 notes=data["notes"],
-                completed=data["completed"]
+                completed=data["completed"],
             )
             
             self.task_manager.update_task(self.current_selected_index, task)
@@ -507,9 +716,19 @@ class TaskPlannerApp:
         """Load a task's data into the input form."""
         self.title_entry.delete(0, tk.END)
         self.title_entry.insert(0, task.title)
+
+        self.category_var.set(getattr(task, "category", ""))
         
         self.deadline_entry.delete(0, tk.END)
         self.deadline_entry.insert(0, task.deadline)
+
+        # Start / end datetimes
+        self.start_entry.delete(0, tk.END)
+        if getattr(task, "start_datetime", ""):
+            self.start_entry.insert(0, task.start_datetime)
+        self.end_entry.delete(0, tk.END)
+        if getattr(task, "end_datetime", ""):
+            self.end_entry.insert(0, task.end_datetime)
         
         self.time_entry.delete(0, tk.END)
         # Format hours: remove trailing zeros if it's a whole number
@@ -538,7 +757,7 @@ class TaskPlannerApp:
             item = self.task_tree.insert(
                 "",
                 tk.END,
-                values=(task.title, task.deadline, time_str, status),
+                values=(task.title, getattr(task, "category", ""), task.deadline, time_str, status),
                 tags=("completed" if task.completed else "not_completed",)
             )
         

@@ -8,8 +8,8 @@ separated from the GUI to enable unit testing.
 import json
 import os
 from dataclasses import dataclass, asdict
-from datetime import datetime
-from typing import List, Optional, Callable
+from datetime import datetime, timedelta
+from typing import List, Optional
 
 
 @dataclass
@@ -19,15 +19,21 @@ class Task:
     
     Fields:
         title: Task title (required, string)
+        category: Task category (required at GUI level, string)
         deadline: Deadline date in DD-MM-YYYY format (required, string)
-        estimated_time: Estimated time in hours (required, float)
+        estimated_time: Estimated time / duration in hours (required, float)
             Examples: 1.0 (1 hour), 1.25 (1 hour 15 minutes), 2.5 (2 hours 30 minutes)
+        start_datetime: Optional start date and time in DD-MM-YYYY HH:MM format
+        end_datetime: Optional end date and time in DD-MM-YYYY HH:MM format
         notes: Additional notes or hints (optional, string)
         completed: Completion status (boolean)
     """
     title: str
     deadline: str  # DD-MM-YYYY format
     estimated_time: float  # hours (e.g., 1.25 = 1 hour 15 minutes)
+    category: str = ""
+    start_datetime: str = ""  # DD-MM-YYYY HH:MM
+    end_datetime: str = ""    # DD-MM-YYYY HH:MM
     notes: str = ""
     completed: bool = False
 
@@ -42,7 +48,21 @@ class Task:
         
         # Validate deadline format
         if not is_valid_date(self.deadline):
-            raise ValueError(f"Invalid deadline format or date: {self.deadline}. Expected DD-MM-YYYY format.")
+            raise ValueError(
+                f"Invalid deadline format or date: {self.deadline}. Expected DD-MM-YYYY format."
+            )
+        
+        # Optional validation of start/end datetimes if provided
+        if self.start_datetime and not is_valid_datetime(self.start_datetime):
+            raise ValueError(
+                f"Invalid start datetime format: {self.start_datetime}. "
+                "Expected DD-MM-YYYY HH:MM format."
+            )
+        if self.end_datetime and not is_valid_datetime(self.end_datetime):
+            raise ValueError(
+                f"Invalid end datetime format: {self.end_datetime}. "
+                "Expected DD-MM-YYYY HH:MM format."
+            )
 
 
 def parse_date(date_str: str) -> Optional[datetime]:
@@ -89,6 +109,110 @@ def is_valid_date(date_str: str) -> bool:
     
     parsed = parse_date(date_str)
     return parsed is not None
+
+
+def parse_datetime(datetime_str: str) -> Optional[datetime]:
+    """
+    Parse a datetime string in DD-MM-YYYY HH:MM format to a datetime object.
+    
+    Args:
+        datetime_str: Datetime string in DD-MM-YYYY HH:MM format
+        
+    Returns:
+        datetime object if valid, None otherwise
+    """
+    try:
+        return datetime.strptime(datetime_str.strip(), "%d-%m-%Y %H:%M")
+    except (ValueError, AttributeError):
+        return None
+
+
+def format_datetime(dt: datetime) -> str:
+    """
+    Format a datetime object to DD-MM-YYYY HH:MM string format.
+    
+    Args:
+        dt: datetime object
+        
+    Returns:
+        Datetime string in DD-MM-YYYY HH:MM format
+    """
+    return dt.strftime("%d-%m-%Y %H:%M")
+
+
+def is_valid_datetime(datetime_str: str) -> bool:
+    """
+    Validate if a datetime string is in DD-MM-YYYY HH:MM format and represents a valid datetime.
+    
+    Args:
+        datetime_str: Datetime string to validate
+        
+    Returns:
+        True if valid, False otherwise
+    """
+    if not datetime_str or not isinstance(datetime_str, str):
+        return False
+    parsed = parse_datetime(datetime_str)
+    return parsed is not None
+
+
+def resolve_schedule(
+    start_str: str,
+    end_str: str,
+    duration_hours: Optional[float],
+) -> tuple[str, str, float]:
+    """
+    Resolve the schedule based on start, end, and duration.
+    
+    At least two of the three parameters (start, end, duration) must be provided
+    and valid. The missing one will be calculated.
+    
+    Args:
+        start_str: Start datetime string in DD-MM-YYYY HH:MM format (or empty)
+        end_str: End datetime string in DD-MM-YYYY HH:MM format (or empty)
+        duration_hours: Duration in hours as float (or None)
+        
+    Returns:
+        Tuple of (start_str_out, end_str_out, duration_hours_out)
+        
+    Raises:
+        ValueError: If fewer than two values are provided or values are inconsistent.
+    """
+    start_dt = parse_datetime(start_str) if start_str else None
+    end_dt = parse_datetime(end_str) if end_str else None
+
+    dur: Optional[float]
+    if duration_hours is None:
+        dur = None
+    else:
+        if not isinstance(duration_hours, (int, float)) or duration_hours < 0:
+            raise ValueError("Duration must be a non-negative number of hours")
+        dur = float(duration_hours)
+
+    provided_count = sum(1 for x in (start_dt, end_dt, dur) if x is not None)
+    if provided_count < 2:
+        raise ValueError("Please provide at least two of: start, end, and duration (hours)")
+
+    # Case: start and end provided -> compute duration
+    if start_dt is not None and end_dt is not None:
+        if end_dt < start_dt:
+            raise ValueError("End datetime must be after start datetime")
+        dur = (end_dt - start_dt).total_seconds() / 3600.0
+
+    # Case: start and duration provided -> compute end
+    elif start_dt is not None and dur is not None:
+        end_dt = start_dt + timedelta(hours=dur)
+
+    # Case: end and duration provided -> compute start
+    elif end_dt is not None and dur is not None:
+        start_dt = end_dt - timedelta(hours=dur)
+
+    # After resolution, all three should be non-None
+    assert start_dt is not None and end_dt is not None and dur is not None
+
+    start_out = format_datetime(start_dt)
+    end_out = format_datetime(end_dt)
+    return start_out, end_out, dur
 
 
 class TaskManager:
@@ -358,6 +482,12 @@ def load_tasks_from_json(filepath: str = "tasks.json") -> List[Task]:
         
         tasks = []
         for task_dict in tasks_data:
+            # Ensure backward compatibility with older JSON files that may not
+            # contain all fields introduced later (category, start/end).
+            if isinstance(task_dict, dict):
+                task_dict.setdefault("category", "")
+                task_dict.setdefault("start_datetime", "")
+                task_dict.setdefault("end_datetime", "")
             try:
                 task = Task(**task_dict)
                 tasks.append(task)

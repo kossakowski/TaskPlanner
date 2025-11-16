@@ -22,7 +22,11 @@ from taskplanner.core import (
     format_date,
     is_valid_date,
     save_tasks_to_json,
-    load_tasks_from_json
+    load_tasks_from_json,
+    parse_datetime,
+    format_datetime,
+    is_valid_datetime,
+    resolve_schedule,
 )
 
 
@@ -112,6 +116,112 @@ class TestDateFunctions(unittest.TestCase):
         self.assertFalse(is_valid_date(123))  # Not a string
 
 
+class TestDatetimeFunctions(unittest.TestCase):
+    """Test datetime parsing, formatting, and validation functions."""
+    
+    def test_parse_valid_datetime(self):
+        """Test parsing valid DD-MM-YYYY HH:MM datetimes."""
+        dt_str = "25-12-2025 14:30"
+        result = parse_datetime(dt_str)
+        self.assertIsNotNone(result)
+        self.assertEqual(result.day, 25)
+        self.assertEqual(result.month, 12)
+        self.assertEqual(result.year, 2025)
+        self.assertEqual(result.hour, 14)
+        self.assertEqual(result.minute, 30)
+    
+    def test_parse_invalid_datetime(self):
+        """Test parsing invalid datetime formats."""
+        invalid_formats = [
+            "25-12-2025",  # Missing time
+            "2025-12-25 14:30",  # Wrong date format
+            "25-12-2025 25:00",  # Invalid hour
+            "32-12-2025 14:30",  # Invalid day
+        ]
+        
+        for dt_str in invalid_formats:
+            result = parse_datetime(dt_str)
+            self.assertIsNone(result, f"Should fail for: {dt_str}")
+    
+    def test_format_datetime(self):
+        """Test formatting datetime to DD-MM-YYYY HH:MM string."""
+        dt_obj = datetime(2025, 12, 25, 14, 30)
+        result = format_datetime(dt_obj)
+        self.assertEqual(result, "25-12-2025 14:30")
+    
+    def test_is_valid_datetime(self):
+        """Test datetime validation."""
+        self.assertTrue(is_valid_datetime("25-12-2025 14:30"))
+        self.assertFalse(is_valid_datetime("25-12-2025"))
+        self.assertFalse(is_valid_datetime("invalid"))
+
+
+class TestScheduleResolution(unittest.TestCase):
+    """Test schedule resolution (start/end/duration auto-calculation)."""
+    
+    def test_resolve_start_and_duration(self):
+        """Test calculating end from start and duration."""
+        start_str = "12-12-2025 12:00"
+        duration = 2.0  # 2 hours
+        
+        start_out, end_out, duration_out = resolve_schedule(
+            start_str=start_str,
+            end_str="",
+            duration_hours=duration
+        )
+        
+        self.assertEqual(start_out, "12-12-2025 12:00")
+        self.assertEqual(end_out, "12-12-2025 14:00")
+        self.assertEqual(duration_out, 2.0)
+    
+    def test_resolve_end_and_duration(self):
+        """Test calculating start from end and duration."""
+        end_str = "12-12-2025 14:00"
+        duration = 2.0  # 2 hours
+        
+        start_out, end_out, duration_out = resolve_schedule(
+            start_str="",
+            end_str=end_str,
+            duration_hours=duration
+        )
+        
+        self.assertEqual(start_out, "12-12-2025 12:00")
+        self.assertEqual(end_out, "12-12-2025 14:00")
+        self.assertEqual(duration_out, 2.0)
+    
+    def test_resolve_start_and_end(self):
+        """Test calculating duration from start and end."""
+        start_str = "12-12-2025 12:00"
+        end_str = "12-12-2025 14:30"
+        
+        start_out, end_out, duration_out = resolve_schedule(
+            start_str=start_str,
+            end_str=end_str,
+            duration_hours=None
+        )
+        
+        self.assertEqual(start_out, "12-12-2025 12:00")
+        self.assertEqual(end_out, "12-12-2025 14:30")
+        self.assertEqual(duration_out, 2.5)  # 2 hours 30 minutes
+    
+    def test_resolve_insufficient_fields(self):
+        """Test that providing fewer than 2 fields raises error."""
+        with self.assertRaises(ValueError):
+            resolve_schedule(start_str="12-12-2025 12:00", end_str="", duration_hours=None)
+        
+        with self.assertRaises(ValueError):
+            resolve_schedule(start_str="", end_str="", duration_hours=2.0)
+    
+    def test_resolve_invalid_end_before_start(self):
+        """Test that end before start raises error."""
+        with self.assertRaises(ValueError):
+            resolve_schedule(
+                start_str="12-12-2025 14:00",
+                end_str="12-12-2025 12:00",
+                duration_hours=None
+            )
+
+
 class TestTask(unittest.TestCase):
     """Test Task data class and validation."""
     
@@ -121,13 +231,19 @@ class TestTask(unittest.TestCase):
             title="Test Task",
             deadline="25-12-2025",
             estimated_time=1.0,
+            category="Work",
+            start_datetime="24-12-2025 10:00",
+            end_datetime="24-12-2025 11:00",
             notes="Test notes",
-            completed=False
+            completed=False,
         )
         
         self.assertEqual(task.title, "Test Task")
         self.assertEqual(task.deadline, "25-12-2025")
         self.assertEqual(task.estimated_time, 1.0)
+        self.assertEqual(task.category, "Work")
+        self.assertEqual(task.start_datetime, "24-12-2025 10:00")
+        self.assertEqual(task.end_datetime, "24-12-2025 11:00")
         self.assertEqual(task.notes, "Test notes")
         self.assertFalse(task.completed)
     
