@@ -133,4 +133,7 @@ dmypy.json
 .DS_Store
 Thumbs.db
 
+# Application data
+tasks.json
+
 tasks.json
