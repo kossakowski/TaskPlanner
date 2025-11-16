@@ -1,9 +1,14 @@
 # TaskPlanner Requirements
 # 
-# This application uses only Python standard library modules:
+# This application uses Python standard library modules:
 # - tkinter (GUI)
 # - json (data persistence)
 # - datetime (date handling)
 # - unittest (testing)
 #
-# No external dependencies are required for Python 3.8+
+# Optional dependency for enhanced date picker functionality:
+# - tkcalendar (for graphical date picker)
+#   Install with: pip install tkcalendar
+#
+# Note: The application works without tkcalendar, but the date picker
+# button will not appear. Users can still enter dates manually.

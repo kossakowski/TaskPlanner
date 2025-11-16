@@ -120,14 +120,14 @@ class TestTask(unittest.TestCase):
         task = Task(
             title="Test Task",
             deadline="25-12-2025",
-            estimated_time=60,
+            estimated_time=1.0,
             notes="Test notes",
             completed=False
         )
         
         self.assertEqual(task.title, "Test Task")
         self.assertEqual(task.deadline, "25-12-2025")
-        self.assertEqual(task.estimated_time, 60)
+        self.assertEqual(task.estimated_time, 1.0)
         self.assertEqual(task.notes, "Test notes")
         self.assertFalse(task.completed)
     
@@ -136,35 +136,35 @@ class TestTask(unittest.TestCase):
         task = Task(
             title="Minimal Task",
             deadline="01-01-2025",
-            estimated_time=30
+            estimated_time=0.5
         )
         
         self.assertEqual(task.title, "Minimal Task")
         self.assertEqual(task.deadline, "01-01-2025")
-        self.assertEqual(task.estimated_time, 30)
+        self.assertEqual(task.estimated_time, 0.5)
         self.assertEqual(task.notes, "")  # Default empty
         self.assertFalse(task.completed)  # Default False
     
     def test_task_empty_title_raises_error(self):
         """Test that empty title raises ValueError."""
         with self.assertRaises(ValueError):
-            Task(title="", deadline="25-12-2025", estimated_time=60)
+            Task(title="", deadline="25-12-2025", estimated_time=1.0)
         
         with self.assertRaises(ValueError):
-            Task(title="   ", deadline="25-12-2025", estimated_time=60)
+            Task(title="   ", deadline="25-12-2025", estimated_time=1.0)
     
     def test_task_missing_deadline_raises_error(self):
         """Test that missing deadline raises ValueError."""
         with self.assertRaises(ValueError):
-            Task(title="Test", deadline="", estimated_time=60)
+            Task(title="Test", deadline="", estimated_time=1.0)
     
     def test_task_invalid_deadline_raises_error(self):
         """Test that invalid deadline format raises ValueError."""
         with self.assertRaises(ValueError):
-            Task(title="Test", deadline="2025-12-25", estimated_time=60)
+            Task(title="Test", deadline="2025-12-25", estimated_time=1.0)
         
         with self.assertRaises(ValueError):
-            Task(title="Test", deadline="32-13-2025", estimated_time=60)
+            Task(title="Test", deadline="32-13-2025", estimated_time=1.0)
     
     def test_task_invalid_estimated_time_raises_error(self):
         """Test that invalid estimated time raises ValueError."""
@@ -184,21 +184,21 @@ class TestTaskManager(unittest.TestCase):
         self.task1 = Task(
             title="Task 1",
             deadline="25-12-2025",
-            estimated_time=60,
+            estimated_time=1.0,
             notes="Notes 1",
             completed=False
         )
         self.task2 = Task(
             title="Task 2",
             deadline="01-01-2025",
-            estimated_time=30,
+            estimated_time=0.5,
             notes="Notes 2",
             completed=True
         )
         self.task3 = Task(
             title="Another Task",
             deadline="15-06-2025",
-            estimated_time=120,
+            estimated_time=2.0,
             completed=False
         )
     
@@ -215,7 +215,7 @@ class TestTaskManager(unittest.TestCase):
     def test_add_task_validation(self):
         """Test that adding invalid task raises error."""
         with self.assertRaises(ValueError):
-            invalid_task = Task(title="", deadline="25-12-2025", estimated_time=60)
+            invalid_task = Task(title="", deadline="25-12-2025", estimated_time=1.0)
             self.manager.add_task(invalid_task)
     
     def test_get_all_tasks(self):
@@ -266,7 +266,7 @@ class TestTaskManager(unittest.TestCase):
         updated_task = Task(
             title="Updated Task",
             deadline="30-12-2025",
-            estimated_time=90,
+            estimated_time=1.5,
             notes="Updated notes",
             completed=True
         )
@@ -276,7 +276,7 @@ class TestTaskManager(unittest.TestCase):
         retrieved = self.manager.get_task(0)
         self.assertEqual(retrieved.title, "Updated Task")
         self.assertEqual(retrieved.deadline, "30-12-2025")
-        self.assertEqual(retrieved.estimated_time, 90)
+        self.assertEqual(retrieved.estimated_time, 1.5)
         self.assertTrue(retrieved.completed)
     
     def test_update_task_keeps_other_tasks(self):
@@ -287,7 +287,7 @@ class TestTaskManager(unittest.TestCase):
         updated_task = Task(
             title="Updated",
             deadline="25-12-2025",
-            estimated_time=60
+            estimated_time=1.0
         )
         self.manager.update_task(0, updated_task)
         
@@ -373,19 +373,19 @@ class TestTaskManagerSearch(unittest.TestCase):
         self.manager.add_task(Task(
             title="Python Programming",
             deadline="25-12-2025",
-            estimated_time=60,
+            estimated_time=1.0,
             notes="Learn Python basics"
         ))
         self.manager.add_task(Task(
             title="Java Development",
             deadline="01-01-2025",
-            estimated_time=120,
+            estimated_time=2.0,
             notes="Java project"
         ))
         self.manager.add_task(Task(
             title="Python Testing",
             deadline="15-06-2025",
-            estimated_time=90,
+            estimated_time=1.5,
             notes="Write Python tests"
         ))
     
@@ -440,17 +440,17 @@ class TestTaskManagerSorting(unittest.TestCase):
         self.manager.add_task(Task(
             title="Task C",
             deadline="25-12-2025",
-            estimated_time=60
+            estimated_time=1.0
         ))
         self.manager.add_task(Task(
             title="Task A",
             deadline="01-01-2025",
-            estimated_time=30
+            estimated_time=0.5
         ))
         self.manager.add_task(Task(
             title="Task B",
             deadline="15-06-2025",
-            estimated_time=90
+            estimated_time=1.5
         ))
     
     def test_sort_by_deadline_ascending(self):
@@ -492,9 +492,9 @@ class TestTaskManagerSorting(unittest.TestCase):
     def test_sort_by_title_case_insensitive(self):
         """Test that title sorting is case-insensitive."""
         manager = TaskManager()
-        manager.add_task(Task(title="zebra", deadline="01-01-2025", estimated_time=60))
-        manager.add_task(Task(title="Apple", deadline="01-01-2025", estimated_time=60))
-        manager.add_task(Task(title="banana", deadline="01-01-2025", estimated_time=60))
+        manager.add_task(Task(title="zebra", deadline="01-01-2025", estimated_time=1.0))
+        manager.add_task(Task(title="Apple", deadline="01-01-2025", estimated_time=1.0))
+        manager.add_task(Task(title="banana", deadline="01-01-2025", estimated_time=1.0))
         
         sorted_tasks = manager.sort_by_title(reverse=False)
         self.assertEqual(sorted_tasks[0].title, "Apple")
@@ -504,9 +504,9 @@ class TestTaskManagerSorting(unittest.TestCase):
     def test_sort_by_completion(self):
         """Test sorting by completion status."""
         manager = TaskManager()
-        manager.add_task(Task(title="Task 1", deadline="01-01-2025", estimated_time=60, completed=False))
-        manager.add_task(Task(title="Task 2", deadline="01-01-2025", estimated_time=60, completed=True))
-        manager.add_task(Task(title="Task 3", deadline="01-01-2025", estimated_time=60, completed=False))
+        manager.add_task(Task(title="Task 1", deadline="01-01-2025", estimated_time=1.0, completed=False))
+        manager.add_task(Task(title="Task 2", deadline="01-01-2025", estimated_time=1.0, completed=True))
+        manager.add_task(Task(title="Task 3", deadline="01-01-2025", estimated_time=1.0, completed=False))
         
         # Completed first
         sorted_tasks = manager.sort_by_completion(completed_first=True)
@@ -530,19 +530,19 @@ class TestTaskManagerFiltering(unittest.TestCase):
         self.manager.add_task(Task(
             title="Task 1",
             deadline="25-12-2025",
-            estimated_time=60,
+            estimated_time=1.0,
             completed=False
         ))
         self.manager.add_task(Task(
             title="Task 2",
             deadline="01-01-2025",
-            estimated_time=30,
+            estimated_time=0.5,
             completed=True
         ))
         self.manager.add_task(Task(
             title="Task 3",
             deadline="15-06-2025",
-            estimated_time=90,
+            estimated_time=1.5,
             completed=False
         ))
     
@@ -588,14 +588,14 @@ class TestJSONPersistence(unittest.TestCase):
             Task(
                 title="Task 1",
                 deadline="25-12-2025",
-                estimated_time=60,
+                estimated_time=1.0,
                 notes="Notes 1",
                 completed=False
             ),
             Task(
                 title="Task 2",
                 deadline="01-01-2025",
-                estimated_time=30,
+                estimated_time=0.5,
                 notes="Notes 2",
                 completed=True
             )
@@ -614,13 +614,13 @@ class TestJSONPersistence(unittest.TestCase):
         self.assertEqual(len(loaded_tasks), 2)
         self.assertEqual(loaded_tasks[0].title, "Task 1")
         self.assertEqual(loaded_tasks[0].deadline, "25-12-2025")
-        self.assertEqual(loaded_tasks[0].estimated_time, 60)
+        self.assertEqual(loaded_tasks[0].estimated_time, 1.0)
         self.assertEqual(loaded_tasks[0].notes, "Notes 1")
         self.assertFalse(loaded_tasks[0].completed)
         
         self.assertEqual(loaded_tasks[1].title, "Task 2")
         self.assertEqual(loaded_tasks[1].deadline, "01-01-2025")
-        self.assertEqual(loaded_tasks[1].estimated_time, 30)
+        self.assertEqual(loaded_tasks[1].estimated_time, 0.5)
         self.assertEqual(loaded_tasks[1].notes, "Notes 2")
         self.assertTrue(loaded_tasks[1].completed)
     
@@ -678,7 +678,7 @@ class TestJSONPersistence(unittest.TestCase):
             Task(
                 title="Test Task",
                 deadline="25-12-2025",
-                estimated_time=60,
+                estimated_time=1.0,
                 notes="Test notes",
                 completed=True
             )
@@ -701,7 +701,7 @@ class TestJSONPersistence(unittest.TestCase):
         
         self.assertEqual(task_dict["title"], "Test Task")
         self.assertEqual(task_dict["deadline"], "25-12-2025")
-        self.assertEqual(task_dict["estimated_time"], 60)
+        self.assertEqual(task_dict["estimated_time"], 1.0)
         self.assertEqual(task_dict["notes"], "Test notes")
         self.assertTrue(task_dict["completed"])
 
@@ -714,9 +714,9 @@ class TestIntegration(unittest.TestCase):
         manager = TaskManager()
         
         # Add multiple tasks
-        task1 = Task(title="Python Task", deadline="25-12-2025", estimated_time=60, completed=False)
-        task2 = Task(title="Java Task", deadline="01-01-2025", estimated_time=30, completed=True)
-        task3 = Task(title="Python Project", deadline="15-06-2025", estimated_time=120, completed=False)
+        task1 = Task(title="Python Task", deadline="25-12-2025", estimated_time=1.0, completed=False)
+        task2 = Task(title="Java Task", deadline="01-01-2025", estimated_time=0.5, completed=True)
+        task3 = Task(title="Python Project", deadline="15-06-2025", estimated_time=2.0, completed=False)
         
         manager.add_task(task1)
         manager.add_task(task2)
@@ -735,7 +735,7 @@ class TestIntegration(unittest.TestCase):
         self.assertEqual(len(incomplete), 2)
         
         # Update
-        updated_task = Task(title="Updated Python Task", deadline="25-12-2025", estimated_time=90)
+        updated_task = Task(title="Updated Python Task", deadline="25-12-2025", estimated_time=1.5)
         manager.update_task(0, updated_task)
         self.assertEqual(manager.get_task(0).title, "Updated Python Task")
         
@@ -752,8 +752,8 @@ class TestIntegration(unittest.TestCase):
         try:
             # Create manager and add tasks
             manager1 = TaskManager()
-            manager1.add_task(Task(title="Task 1", deadline="25-12-2025", estimated_time=60))
-            manager1.add_task(Task(title="Task 2", deadline="01-01-2025", estimated_time=30))
+            manager1.add_task(Task(title="Task 1", deadline="25-12-2025", estimated_time=1.0))
+            manager1.add_task(Task(title="Task 2", deadline="01-01-2025", estimated_time=0.5))
             
             # Save
             save_tasks_to_json(manager1.get_all_tasks(), filepath)

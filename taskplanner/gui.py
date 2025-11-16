@@ -7,7 +7,15 @@ This module contains the main application window and all GUI components.
 import tkinter as tk
 from tkinter import ttk, messagebox, scrolledtext
 from typing import Optional, List, Tuple
-from .core import Task, TaskManager, save_tasks_to_json, load_tasks_from_json, is_valid_date
+from datetime import datetime
+from .core import Task, TaskManager, save_tasks_to_json, load_tasks_from_json, is_valid_date, format_date, parse_date
+
+# Try to import tkcalendar for date picker (optional)
+try:
+    from tkcalendar import DateEntry
+    HAS_DATE_PICKER = True
+except ImportError:
+    HAS_DATE_PICKER = False
 
 
 class TaskPlannerApp:
@@ -73,20 +81,34 @@ class TaskPlannerApp:
         self.title_entry = ttk.Entry(input_frame, width=30)
         self.title_entry.grid(row=0, column=1, sticky=(tk.W, tk.E), pady=5, padx=(5, 0))
         
-        # Deadline field
+        # Deadline field with optional date picker
         ttk.Label(input_frame, text="Deadline (DD-MM-YYYY) *:").grid(row=1, column=0, sticky=tk.W, pady=5)
-        self.deadline_entry = ttk.Entry(input_frame, width=30)
-        self.deadline_entry.grid(row=1, column=1, sticky=(tk.W, tk.E), pady=5, padx=(5, 0))
+        deadline_frame = ttk.Frame(input_frame)
+        deadline_frame.grid(row=1, column=1, sticky=(tk.W, tk.E), pady=5, padx=(5, 0))
+        deadline_frame.columnconfigure(0, weight=1)
         
-        # Estimated time field
-        ttk.Label(input_frame, text="Estimated time (minutes) *:").grid(row=2, column=0, sticky=tk.W, pady=5)
+        self.deadline_entry = ttk.Entry(deadline_frame, width=25)
+        self.deadline_entry.grid(row=0, column=0, sticky=(tk.W, tk.E))
+        
+        # Add date picker button if available
+        if HAS_DATE_PICKER:
+            ttk.Button(deadline_frame, text="📅", width=3, command=self._open_date_picker).grid(row=0, column=1, padx=(5, 0))
+        else:
+            # Create a date picker widget that's always available (fallback)
+            # We'll create a simple popup calendar using tkcalendar if available
+            pass
+        
+        # Estimated time field (hours format)
+        ttk.Label(input_frame, text="Estimated time (hours) *:").grid(row=2, column=0, sticky=tk.W, pady=5)
         self.time_entry = ttk.Entry(input_frame, width=30)
         self.time_entry.grid(row=2, column=1, sticky=(tk.W, tk.E), pady=5, padx=(5, 0))
+        time_help_label = ttk.Label(input_frame, text="e.g., 1 or 1.25 (1h 15min)", font=("TkDefaultFont", 8), foreground="gray")
+        time_help_label.grid(row=3, column=1, sticky=tk.W, padx=(5, 0), pady=(0, 5))
         
         # Notes field
-        ttk.Label(input_frame, text="Notes / Hints:").grid(row=3, column=0, sticky=(tk.W, tk.N), pady=5)
+        ttk.Label(input_frame, text="Notes / Hints:").grid(row=4, column=0, sticky=(tk.W, tk.N), pady=5)
         self.notes_text = scrolledtext.ScrolledText(input_frame, width=30, height=6, wrap=tk.WORD)
-        self.notes_text.grid(row=3, column=1, sticky=(tk.W, tk.E), pady=5, padx=(5, 0))
+        self.notes_text.grid(row=4, column=1, sticky=(tk.W, tk.E), pady=5, padx=(5, 0))
         
         # Completion status checkbox
         self.completed_var = tk.BooleanVar()
@@ -95,11 +117,11 @@ class TaskPlannerApp:
             text="Mark as completed",
             variable=self.completed_var
         )
-        self.completed_checkbox.grid(row=4, column=0, columnspan=2, sticky=tk.W, pady=5)
+        self.completed_checkbox.grid(row=5, column=0, columnspan=2, sticky=tk.W, pady=5)
         
         # Buttons frame
         buttons_frame = ttk.Frame(input_frame)
-        buttons_frame.grid(row=5, column=0, columnspan=2, pady=10)
+        buttons_frame.grid(row=6, column=0, columnspan=2, pady=10)
         
         ttk.Button(buttons_frame, text="Add Task", command=self._add_task).pack(side=tk.LEFT, padx=5)
         ttk.Button(buttons_frame, text="Update Task", command=self._update_task).pack(side=tk.LEFT, padx=5)
@@ -152,7 +174,7 @@ class TaskPlannerApp:
         # Configure column headings
         self.task_tree.heading("Title", text="Title")
         self.task_tree.heading("Deadline", text="Deadline")
-        self.task_tree.heading("Estimated Time", text="Estimated Time (min)")
+        self.task_tree.heading("Estimated Time", text="Estimated Time (h)")
         self.task_tree.heading("Status", text="Status")
         
         # Configure column widths
@@ -205,6 +227,61 @@ class TaskPlannerApp:
         self.current_selected_index = None
         self.task_tree.selection_remove(self.task_tree.selection())
     
+    def _open_date_picker(self):
+        """Open a date picker dialog and insert selected date into deadline field."""
+        if not HAS_DATE_PICKER:
+            return
+        
+        # Create a popup window for date selection
+        popup = tk.Toplevel(self.root)
+        popup.title("Select Date")
+        popup.transient(self.root)
+        popup.grab_set()
+        
+        # Center the popup
+        popup.geometry("300x250")
+        popup.update_idletasks()
+        x = (popup.winfo_screenwidth() // 2) - (popup.winfo_width() // 2)
+        y = (popup.winfo_screenheight() // 2) - (popup.winfo_height() // 2)
+        popup.geometry(f"+{x}+{y}")
+        
+        # Try to parse current date from entry field
+        current_date_str = self.deadline_entry.get().strip()
+        initial_date = None
+        if current_date_str:
+            parsed = parse_date(current_date_str)
+            if parsed:
+                initial_date = parsed
+        
+        # Create DateEntry widget
+        date_entry = DateEntry(
+            popup,
+            width=12,
+            background='darkblue',
+            foreground='white',
+            borderwidth=2,
+            date_pattern='dd-mm-yyyy'
+        )
+        if initial_date:
+            date_entry.set_date(initial_date)
+        
+        date_entry.pack(pady=20)
+        
+        def apply_date():
+            """Apply selected date to the deadline entry field."""
+            selected_date = date_entry.get_date()
+            formatted_date = format_date(selected_date)
+            self.deadline_entry.delete(0, tk.END)
+            self.deadline_entry.insert(0, formatted_date)
+            popup.destroy()
+        
+        # Buttons
+        button_frame = ttk.Frame(popup)
+        button_frame.pack(pady=10)
+        
+        ttk.Button(button_frame, text="OK", command=apply_date).pack(side=tk.LEFT, padx=5)
+        ttk.Button(button_frame, text="Cancel", command=popup.destroy).pack(side=tk.LEFT, padx=5)
+    
     def _validate_form(self) -> Tuple[bool, str]:
         """
         Validate form data.
@@ -227,11 +304,13 @@ class TaskPlannerApp:
             return False, "Estimated time is required"
         
         try:
-            time_value = int(data["estimated_time"])
+            # Remove 'h' suffix if present and convert to float
+            time_str = data["estimated_time"].strip().rstrip('h').strip()
+            time_value = float(time_str)
             if time_value < 0:
                 return False, "Estimated time must be a non-negative number"
         except ValueError:
-            return False, "Estimated time must be a valid integer (minutes)"
+            return False, "Estimated time must be a valid number in hours (e.g., 1 or 1.25)"
         
         return True, ""
     
@@ -245,10 +324,14 @@ class TaskPlannerApp:
         data = self._get_form_data()
         
         try:
+            # Convert estimated time to float (handle 'h' suffix if present)
+            time_str = data["estimated_time"].strip().rstrip('h').strip()
+            estimated_time = float(time_str)
+            
             task = Task(
                 title=data["title"],
                 deadline=data["deadline"],
-                estimated_time=int(data["estimated_time"]),
+                estimated_time=estimated_time,
                 notes=data["notes"],
                 completed=data["completed"]
             )
@@ -276,10 +359,14 @@ class TaskPlannerApp:
         data = self._get_form_data()
         
         try:
+            # Convert estimated time to float (handle 'h' suffix if present)
+            time_str = data["estimated_time"].strip().rstrip('h').strip()
+            estimated_time = float(time_str)
+            
             task = Task(
                 title=data["title"],
                 deadline=data["deadline"],
-                estimated_time=int(data["estimated_time"]),
+                estimated_time=estimated_time,
                 notes=data["notes"],
                 completed=data["completed"]
             )
@@ -425,7 +512,9 @@ class TaskPlannerApp:
         self.deadline_entry.insert(0, task.deadline)
         
         self.time_entry.delete(0, tk.END)
-        self.time_entry.insert(0, str(task.estimated_time))
+        # Format hours: remove trailing zeros if it's a whole number
+        time_str = f"{task.estimated_time:.2f}".rstrip('0').rstrip('.')
+        self.time_entry.insert(0, time_str)
         
         self.notes_text.delete("1.0", tk.END)
         self.notes_text.insert("1.0", task.notes)
@@ -444,10 +533,12 @@ class TaskPlannerApp:
         # Add tasks to treeview
         for task in tasks:
             status = "Done" if task.completed else "Not done"
+            # Format estimated time: remove trailing zeros if it's a whole number
+            time_str = f"{task.estimated_time:.2f}".rstrip('0').rstrip('.')
             item = self.task_tree.insert(
                 "",
                 tk.END,
-                values=(task.title, task.deadline, task.estimated_time, status),
+                values=(task.title, task.deadline, time_str, status),
                 tags=("completed" if task.completed else "not_completed",)
             )
         

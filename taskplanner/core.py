@@ -20,13 +20,14 @@ class Task:
     Fields:
         title: Task title (required, string)
         deadline: Deadline date in DD-MM-YYYY format (required, string)
-        estimated_time: Estimated time in minutes (required, int)
+        estimated_time: Estimated time in hours (required, float)
+            Examples: 1.0 (1 hour), 1.25 (1 hour 15 minutes), 2.5 (2 hours 30 minutes)
         notes: Additional notes or hints (optional, string)
         completed: Completion status (boolean)
     """
     title: str
     deadline: str  # DD-MM-YYYY format
-    estimated_time: int  # minutes
+    estimated_time: float  # hours (e.g., 1.25 = 1 hour 15 minutes)
     notes: str = ""
     completed: bool = False
 
@@ -36,8 +37,8 @@ class Task:
             raise ValueError("Task title is required and cannot be empty")
         if not self.deadline:
             raise ValueError("Deadline is required")
-        if not isinstance(self.estimated_time, int) or self.estimated_time < 0:
-            raise ValueError("Estimated time must be a non-negative integer (minutes)")
+        if not isinstance(self.estimated_time, (int, float)) or self.estimated_time < 0:
+            raise ValueError("Estimated time must be a non-negative number (hours)")
         
         # Validate deadline format
         if not is_valid_date(self.deadline):
